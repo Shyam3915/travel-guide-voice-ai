@@ -2,7 +2,7 @@ import os
 import tempfile
 import requests
 import base64
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from google import genai
 
@@ -19,6 +19,8 @@ try:
     load_dotenv()
 except Exception:
     pass
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__)
 CORS(app)
@@ -123,8 +125,19 @@ def generate_description(place, answer_type, language):
 
 
 @app.route("/", methods=["GET"])
-@app.route("/api", methods=["GET"])
+def home():
+    for folder in [BASE_DIR, os.path.join(BASE_DIR, "public"), os.path.join(BASE_DIR, "Frontend")]:
+        target = os.path.join(folder, "index.html")
+        if os.path.exists(target):
+            return send_from_directory(folder, "index.html")
+    return jsonify({
+        "status": "ok",
+        "service": "Travel Guide API"
+    })
+
+
 @app.route("/api/health", methods=["GET"])
+@app.route("/api", methods=["GET"])
 @app.route("/health", methods=["GET"])
 def health_check():
     return jsonify({
@@ -173,6 +186,17 @@ def generate_audio_guide():
         "description": text_description,
         "audioBase64": encoded_audio
     })
+
+
+@app.route("/<path:filename>", methods=["GET"])
+def static_fallback(filename):
+    if filename.startswith("api/"):
+        return jsonify({"error": "API route not found"}), 404
+    for folder in [BASE_DIR, os.path.join(BASE_DIR, "public"), os.path.join(BASE_DIR, "Frontend")]:
+        target = os.path.join(folder, filename)
+        if os.path.exists(target) and os.path.isfile(target):
+            return send_from_directory(folder, filename)
+    return jsonify({"error": "Not Found"}), 404
 
 
 if __name__ == "__main__":
