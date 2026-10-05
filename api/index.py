@@ -63,7 +63,7 @@ Respond ONLY in {language}.
 def get_genai_client():
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable is not set. Please add it to your environment or Vercel project settings.")
+        raise ValueError("GEMINI_API_KEY environment variable is not configured. Please add it to your Vercel Project Settings > Environment Variables.")
     return genai.Client(api_key=api_key)
 
 
@@ -75,7 +75,7 @@ def generate_speech(text, voice_id, locale):
     url = "https://global.api.murf.ai/v1/speech/stream"
     murf_key = os.environ.get("MURF_API_KEY")
     if not murf_key:
-        print("MURF_API_KEY environment variable is not set.")
+        print("MURF_API_KEY environment variable is not configured.")
         return temp_audio
 
     headers = {
@@ -137,17 +137,28 @@ def home():
 
 
 @app.route("/api/health", methods=["GET"])
+@app.route("/api/index.py", methods=["GET"])
+@app.route("/api/index", methods=["GET"])
 @app.route("/api", methods=["GET"])
 @app.route("/health", methods=["GET"])
 def health_check():
+    has_gemini = bool(os.environ.get("GEMINI_API_KEY"))
+    has_murf = bool(os.environ.get("MURF_API_KEY"))
     return jsonify({
         "status": "ok",
-        "service": "Travel Guide API"
+        "service": "Travel Guide API",
+        "env_configured": {
+            "GEMINI_API_KEY": has_gemini,
+            "MURF_API_KEY": has_murf
+        }
     })
 
 
 @app.route("/api/generate-audio-guide", methods=["POST"])
 @app.route("/generate-audio-guide", methods=["POST"])
+@app.route("/api/index.py", methods=["POST"])
+@app.route("/api/index", methods=["POST"])
+@app.route("/api", methods=["POST"])
 def generate_audio_guide():
     data = request.json or {}
     place = data.get("place", "")
@@ -157,13 +168,13 @@ def generate_audio_guide():
     locale = data.get("locale", "en-US")
 
     if not place:
-        return jsonify({"error": "Place is required"}), 400
+        return jsonify({"error": "Destination place is required"}), 400
 
     try:
         text_description = generate_description(place, answer_type, language)
     except Exception as e:
         print(f"Error in Gemini generation: {e}")
-        return jsonify({"error": f"Failed to generate description: {str(e)}"}), 500
+        return jsonify({"error": f"Gemini Error: {str(e)}"}), 500
 
     encoded_audio = ""
     audio_path = None
@@ -190,14 +201,9 @@ def generate_audio_guide():
 
 @app.route("/<path:filename>", methods=["GET", "POST"])
 def static_fallback(filename):
-    if filename.startswith("api/"):
-        return jsonify({
-            "error": "API route not found",
-            "filename": filename,
-            "path": request.path,
-            "url": request.url,
-            "PATH_INFO": request.environ.get("PATH_INFO")
-        }), 404
+    if request.method == "POST":
+        return generate_audio_guide()
+
     for folder in [BASE_DIR, os.path.join(BASE_DIR, "public"), os.path.join(BASE_DIR, "Frontend")]:
         target = os.path.join(folder, filename)
         if os.path.exists(target) and os.path.isfile(target):
