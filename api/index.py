@@ -188,10 +188,16 @@ def generate_audio_guide():
     })
 
 
-@app.route("/<path:filename>", methods=["GET"])
+@app.route("/<path:filename>", methods=["GET", "POST"])
 def static_fallback(filename):
     if filename.startswith("api/"):
-        return jsonify({"error": "API route not found"}), 404
+        return jsonify({
+            "error": "API route not found",
+            "filename": filename,
+            "path": request.path,
+            "url": request.url,
+            "PATH_INFO": request.environ.get("PATH_INFO")
+        }), 404
     for folder in [BASE_DIR, os.path.join(BASE_DIR, "public"), os.path.join(BASE_DIR, "Frontend")]:
         target = os.path.join(folder, filename)
         if os.path.exists(target) and os.path.isfile(target):
